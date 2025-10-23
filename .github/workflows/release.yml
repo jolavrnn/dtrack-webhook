@@ -35,16 +35,16 @@ jobs:
           
           if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
             # Build Linux binaries
-            go build -o dist/docs-updater-linux-amd64 .
-            GOARCH=arm64 go build -o dist/docs-updater-linux-arm64 .
+            go build -o dist/dtrack-webhook-linux-amd64 .
+            GOARCH=arm64 go build -o dist/dtrack-webhook-linux-arm64 .
           elif [ "${{ matrix.os }}" = "macos-latest" ]; then
             # Build macOS binaries
-            go build -o dist/docs-updater-darwin-amd64 .
-            GOARCH=arm64 go build -o dist/docs-updater-darwin-arm64 .
+            go build -o dist/dtrack-webhook-darwin-amd64 .
+            GOARCH=arm64 go build -o dist/dtrack-webhook-darwin-arm64 .
           else
             # Build Windows binaries
-            go build -o dist/docs-updater-windows-amd64.exe .
-            GOARCH=arm64 go build -o dist/docs-updater-windows-arm64.exe .
+            go build -o dist/dtrack-webhook-windows-amd64.exe .
+            GOARCH=arm64 go build -o dist/dtrack-webhook-windows-arm64.exe .
           fi
         shell: bash
 
@@ -78,30 +78,30 @@ jobs:
           mkdir -p release-assets
           
           # Copy all binaries to release directory with proper names
-          find artifacts -type f -name "docs-updater-*" -exec cp {} release-assets/ \;
+          find artifacts -type f -name "dtrack-webhook-*" -exec cp {} release-assets/ \;
           
           # Create a simple NOTES for the release
           cat > release-assets/NOTES.md << 'EOF'
-          # docs-updater Check Application
+          # dtrack-webhook Check Application
           
           ## Available Binaries
           
           ### Linux
-          - `docs-updater-linux-amd64` - 64-bit Intel/AMD
-          - `docs-updater-linux-arm64` - 64-bit ARM
+          - `dtrack-webhook-linux-amd64` - 64-bit Intel/AMD
+          - `dtrack-webhook-linux-arm64` - 64-bit ARM
           
           ### Windows  
-          - `docs-updater-windows-amd64.exe` - 64-bit Intel/AMD
-          - `docs-updater-windows-arm64.exe` - 64-bit ARM
+          - `dtrack-webhook-windows-amd64.exe` - 64-bit Intel/AMD
+          - `dtrack-webhook-windows-arm64.exe` - 64-bit ARM
           
           ### macOS
-          - `docs-updater-darwin-amd64` - 64-bit Intel
-          - `docs-updater-darwin-arm64` - 64-bit Apple Silicon
+          - `dtrack-webhook-darwin-amd64` - 64-bit Intel
+          - `dtrack-webhook-darwin-arm64` - 64-bit Apple Silicon
           
           ## Usage
           
           1. Download the binary for your platform
-          2. (Linux/macOS) Make executable: `chmod +x docs-updater-*`
+          2. (Linux/macOS) Make executable: `chmod +x dtrack-webhook-*`
           3. Run the application
           
           ## Notes
@@ -161,29 +161,29 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.bump.outputs.new_tag }}
-          name: docs-updater ${{ steps.bump.outputs.new_tag }}
+          name: dtrack-webhook ${{ steps.bump.outputs.new_tag }}
           body: |
-            ## docs-updater Check Application
+            ## dtrack-webhook Check Application
             
             Cross-platform application utility to automatically **generate/update domain lists** in README.md.
             
             ### Downloads
             
             **Linux:**
-            - `docs-updater-linux-amd64` - 64-bit Intel/AMD
-            - `docs-updater-linux-arm64` - 64-bit ARM
+            - `dtrack-webhook-linux-amd64` - 64-bit Intel/AMD
+            - `dtrack-webhook-linux-arm64` - 64-bit ARM
             
             **Windows:**
-            - `docs-updater-windows-amd64.exe` - 64-bit Intel/AMD  
-            - `docs-updater-windows-arm64.exe` - 64-bit ARM
+            - `dtrack-webhook-windows-amd64.exe` - 64-bit Intel/AMD  
+            - `dtrack-webhook-windows-arm64.exe` - 64-bit ARM
             
             **macOS:**
-            - `docs-updater-darwin-amd64` - 64-bit Intel
-            - `docs-updater-darwin-arm64` - 64-bit Apple Silicon
+            - `dtrack-webhook-darwin-amd64` - 64-bit Intel
+            - `dtrack-webhook-darwin-arm64` - 64-bit Apple Silicon
             
             ### Usage
             1. Download the binary for your platform
-            2. (Linux/macOS) Make executable: `chmod +x docs-updater-*`
+            2. (Linux/macOS) Make executable: `chmod +x dtrack-webhook-*`
             3. Specify in README.md
               <!-- DOMAIN-LIST:START -->
               <!-- DOMAIN-LIST:END -->
