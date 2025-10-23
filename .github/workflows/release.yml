@@ -1,0 +1,209 @@
+name: Build and Release
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build binaries
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache: true
+
+      - name: Build application
+        run: |
+          mkdir -p dist
+          
+          if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
+            # Build Linux binaries
+            go build -o dist/docs-updater-linux-amd64 .
+            GOARCH=arm64 go build -o dist/docs-updater-linux-arm64 .
+          elif [ "${{ matrix.os }}" = "macos-latest" ]; then
+            # Build macOS binaries
+            go build -o dist/docs-updater-darwin-amd64 .
+            GOARCH=arm64 go build -o dist/docs-updater-darwin-arm64 .
+          else
+            # Build Windows binaries
+            go build -o dist/docs-updater-windows-amd64.exe .
+            GOARCH=arm64 go build -o dist/docs-updater-windows-arm64.exe .
+          fi
+        shell: bash
+
+      - name: Upload binaries artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: binaries-${{ matrix.os }}
+          path: dist/*
+          retention-days: 1
+
+  release:
+    name: Create Release
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download all binaries
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: binaries-*
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release-assets
+          
+          # Copy all binaries to release directory with proper names
+          find artifacts -type f -name "docs-updater-*" -exec cp {} release-assets/ \;
+          
+          # Create a simple NOTES for the release
+          cat > release-assets/NOTES.md << 'EOF'
+          # docs-updater Check Application
+          
+          ## Available Binaries
+          
+          ### Linux
+          - `docs-updater-linux-amd64` - 64-bit Intel/AMD
+          - `docs-updater-linux-arm64` - 64-bit ARM
+          
+          ### Windows  
+          - `docs-updater-windows-amd64.exe` - 64-bit Intel/AMD
+          - `docs-updater-windows-arm64.exe` - 64-bit ARM
+          
+          ### macOS
+          - `docs-updater-darwin-amd64` - 64-bit Intel
+          - `docs-updater-darwin-arm64` - 64-bit Apple Silicon
+          
+          ## Usage
+          
+          1. Download the binary for your platform
+          2. (Linux/macOS) Make executable: `chmod +x docs-updater-*`
+          3. Run the application
+          
+          ## Notes
+          - Linux users may need to install OpenGL libraries: `sudo apt-get install libgl1-mesa-dev`
+          - macOS users may need to allow the app in Security & Privacy settings
+          EOF
+          
+          echo "Release assets:"
+          ls -la release-assets/
+
+      - name: Bump version
+        id: bump
+        run: |
+          # Fetch all tags
+          git fetch --tags
+
+          # Get latest tag or start from v1.0.0
+          latest=$(git describe --tags --abbrev=0 2>/dev/null || echo "v1.0.0")
+          echo "Latest tag: $latest"
+          
+          # Extract version components
+          if [[ $latest =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            major="${BASH_REMATCH[1]}"
+            minor="${BASH_REMATCH[2]}"
+            patch="${BASH_REMATCH[3]}"
+          else
+            major="1"
+            minor="0"
+            patch="0"
+          fi
+          
+          # Increment patch version until we find a free tag
+          while git ls-remote --tags origin | grep -q "refs/tags/v$major.$minor.$patch"; do
+            patch=$((patch + 1))
+          done
+
+          new_tag="v$major.$minor.$patch"
+          echo "new_tag=$new_tag" >> $GITHUB_OUTPUT
+          echo "Creating new tag: $new_tag"
+
+      - name: Create Git tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Only create tag if it doesn't already exist locally
+          if ! git rev-parse "$new_tag" >/dev/null 2>&1; then
+            git tag ${{ steps.bump.outputs.new_tag }}
+          else
+            echo "Tag ${{ steps.bump.outputs.new_tag }} already exists locally, skipping tag creation"
+          fi
+          
+          # Push tag, ignore if it already exists remotely
+          git push origin ${{ steps.bump.outputs.new_tag }} --force-with-lease || echo "Tag already exists remotely"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.bump.outputs.new_tag }}
+          name: docs-updater ${{ steps.bump.outputs.new_tag }}
+          body: |
+            ## docs-updater Check Application
+            
+            Cross-platform application utility to automatically **generate/update domain lists** in README.md.
+            
+            ### Downloads
+            
+            **Linux:**
+            - `docs-updater-linux-amd64` - 64-bit Intel/AMD
+            - `docs-updater-linux-arm64` - 64-bit ARM
+            
+            **Windows:**
+            - `docs-updater-windows-amd64.exe` - 64-bit Intel/AMD  
+            - `docs-updater-windows-arm64.exe` - 64-bit ARM
+            
+            **macOS:**
+            - `docs-updater-darwin-amd64` - 64-bit Intel
+            - `docs-updater-darwin-arm64` - 64-bit Apple Silicon
+            
+            ### Usage
+            1. Download the binary for your platform
+            2. (Linux/macOS) Make executable: `chmod +x docs-updater-*`
+            3. Specify in README.md
+              <!-- DOMAIN-LIST:START -->
+              <!-- DOMAIN-LIST:END -->
+            3. Run the application
+            
+            ### System Requirements
+            - **Linux**: Requires OpenGL libraries (`libgl1-mesa-dev`)
+            - **macOS**: May require allowing the app in Security & Privacy settings
+            - **Windows**: Should run without additional dependencies
+            
+            ### Features
+             - Recursive scanning of files/folders or specific `include` files.
+             - Excluding files/folders via CLI or YAML config.
+             - Domain filtering using patterns (`*.example.*`, etc.).
+             - Output in Markdown list, Markdown table, or shell `/etc/hosts` format.
+             - Optional IP specification for shell mode.
+             - Optional output file instead of default (`README.md` for Markdown, stdout for shell).
+            
+          files: release-assets/*
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
