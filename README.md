@@ -20,74 +20,17 @@ Supports multiple SBOM formats (CycloneDX, SPDX, Trivy Operator) with optimized 
 
 ```bash
 docker compose up -d
+# Open: http://localhost:8080
 ```
-
-### Full Example
-
-```yaml
-version: '3.8'
-
-services:
-  dtrack-webhook:
-    build: .
-    container_name: dtrack-webhook
-    environment:
-      PORT: 8081
-      DTRACK_URL: http://dependencytrack-apiserver:8080
-      DTRACK_API_KEY: your-dtrack-api-key-here
-      DT_PROJECT_NAME: "[[.sbomReport.report.artifact.repository]]"
-      DT_PROJECT_VERSION: "[[.sbomReport.report.artifact.tag]]"
-      DT_PROJECT_TAGS: "webhook,automated"
-      DT_PROJECT_PARENT: "develop"
-      LOG_LEVEL: info
-      LOG_FORMAT: ecs
-    ports:
-      - "8082:8081"
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8081/health || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-    networks:
-      - dtrack-net
-    restart: unless-stopped
-
-  dependencytrack-apiserver:
-    image: dependencytrack/apiserver:latest
-    container_name: dtrack-apiserver
-    environment:
-      - ALPINE_DATABASE_MODE=embedded
-      - ALPINE_DATABASE_URL=jdbc:h2:mem:.//opt/h2;mode=PostgreSQL
-    ports:
-      - "8080:8080"
-    networks:
-      - dtrack-net
-    restart: unless-stopped
-
-  dependencytrack-frontend:
-    image: dependencytrack/frontend:latest
-    container_name: dtrack-frontend
-    environment:
-      - API_BASE_URL=http://dtrack-apiserver:8080
-    ports:
-      - "8085:8080"
-    depends_on:
-      - dtrack-apiserver
-    networks:
-      - dtrack-net
-    restart: unless-stopped
-
-networks:
-  dtrack-net:
-    driver: bridge
-```
+- DependencyTrack Web: http://localhost:8080
+- DependencyTrack API: http://localhost:8081
+- DependencyTrack Webhook: http://localhost:8082
 
 ## Environment Variables
 
 | Variable | Description | Default |
 |-----------|--------------|----------|
-| `PORT` | Webhook server port | 8081 |
+| `PORT` | Webhook server port | 8080 |
 | `DTRACK_URL` | Dependency-Track API server URL | **Required** |
 | `DTRACK_API_KEY` | Dependency-Track API key | **Required** |
 | `DT_PROJECT_NAME` | Project name template | `[[.sbomReport.report.artifact.repository]]` |
@@ -152,52 +95,34 @@ curl -LO https://github.com/jolavrnn/dtrack-webhook/releases/download/v1.0.0/dtr
 ## Docker Standalone
 
 ```bash
-docker run -d   -p 8082:8081   -e DTRACK_URL=http://your-dtrack-server:8080   -e DTRACK_API_KEY=your-api-key   -e DT_PROJECT_TAGS="webhook,automated"   -e LOG_LEVEL=info   ghcr.io/jolavrnn/dtrack-webhook:latest
+docker run -d   -p 8082:8080   -e DTRACK_URL=http://your-dtrack-server:8080   -e DTRACK_API_KEY=your-api-key   -e DT_PROJECT_TAGS="webhook,automated"   -e LOG_LEVEL=info   ghcr.io/jolavrnn/dtrack-webhook:latest
 ```
 
 ## Usage
 
-### Webhook Server Mode (Recommended)
+### Webhook Server Mode CLI
 
 ```bash
+export PORT=8082
 export DTRACK_URL=http://localhost:8080
 export DTRACK_API_KEY=your-api-key
 
-dtrack-webhook server
+./dtrack-webhook 
+
+curl -X POST -H "Content-Type: application/json" --data-binary @bom.json http://localhost:8082/webhook
 ```
 
-Or using CLI flags:
+### Processing SBOM Files
 
 ```bash
-dtrack-webhook server   --port 8081   --dtrack-url http://localhost:8080   --dtrack-api-key your-api-key   --verbose
-```
-
-### Processing Individual SBOM Files
-
-```bash
-# Process a single SBOM file
-dtrack-webhook process -i sbom.json -o processed-sbom.json
-
-# Process with custom project naming
-dtrack-webhook process   -i trivy-sbom.json   -o output.json   -n "my-application"   -v "1.0.0"   --verbose
-
-# Process a directory of SBOM files
-dtrack-webhook process-dir -i ./sboms/ -o ./processed/
-```
-
-## Command Line Help
-
-```bash
-dtrack-webhook server --help
-dtrack-webhook process --help
-dtrack-webhook process-dir --help
+curl -X POST -H "Content-Type: application/json" --data-binary @trivy-k8s-crd-sbom.json http://localhost:8082/webhook
 ```
 
 ## Webhook API
 
 ### Health Check
 ```bash
-curl http://localhost:8081/health
+curl http://localhost:8082/health
 ```
 
 Response:
@@ -210,12 +135,12 @@ Response:
 
 ### Webhook Endpoint
 ```bash
-curl -X POST http://localhost:8081/webhook   -H "Content-Type: application/json"   -d @sbom.json
+curl -X POST http://localhost:8082/webhook   -H "Content-Type: application/json"   -d @sbom.json
 ```
 
 Or directly from Trivy:
 ```bash
-trivy image --format cyclonedx your-image:tag |   curl -X POST http://localhost:8081/webhook     -H "Content-Type: application/json"     -d @-
+trivy image --format cyclonedx your-image:tag |   curl -X POST http://localhost:8082/webhook     -H "Content-Type: application/json"     -d @-
 ```
 
 ## Example Response
@@ -251,7 +176,7 @@ spec:
       - name: dtrack-webhook
         image: ghcr.io/jolavrnn/dtrack-webhook:latest
         ports:
-        - containerPort: 8081
+        - containerPort: 8080
         env:
         - name: DTRACK_URL
           value: "http://dependencytrack-apiserver:8080"
@@ -265,13 +190,13 @@ spec:
         livenessProbe:
           httpGet:
             path: /health
-            port: 8081
+            port: 8080
           initialDelaySeconds: 30
           periodSeconds: 10
         readinessProbe:
           httpGet:
             path: /health
-            port: 8081
+            port: 8080
           initialDelaySeconds: 5
           periodSeconds: 5
 ```
@@ -300,7 +225,7 @@ jobs:
 
       - name: Upload SBOM to Dependency-Track via Webhook
         run: |
-          curl -X POST http://your-dtrack-webhook:8081/webhook             -H "Content-Type: application/json"             -d @sbom.json
+          curl -X POST http://your-dtrack-webhook:8082/webhook             -H "Content-Type: application/json"             -d @sbom.json
 ```
 
 ## Project Name Handling
