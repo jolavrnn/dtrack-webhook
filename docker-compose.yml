@@ -1,0 +1,178 @@
+services:
+  dtrack-postgres:
+    image: postgres:15-alpine
+    hostname: dtrack-database
+    container_name: dtrack-database
+    command: >
+      postgres
+      -c shared_buffers=256MB
+      -c effective_cache_size=1GB
+      -c maintenance_work_mem=64MB
+      -c checkpoint_completion_target=0.9
+      -c wal_buffers=16MB
+      -c default_statistics_target=100
+      -c max_connections=100
+    environment:
+      - POSTGRES_DB=dtrack
+      - POSTGRES_USER=dtrack
+      - POSTGRES_PASSWORD=dtrack
+      - POSTGRES_INITDB_ARGS=--encoding=UTF8 --locale=C
+    volumes:
+      - dtrack-postgres-data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dtrack -d dtrack"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - dtrack-net
+
+  dtrack-apiserver:
+    image: dependencytrack/apiserver:4.13.5
+    hostname: dependencytrack-api
+    container_name: dependencytrack-api
+    environment:
+      - ALPINE_CORS_ENABLED=true
+      - ALPINE_CORS_ALLOW_ORIGIN=*
+      - ALPINE_CORS_MAX_AGE=3600
+      - LOGGING_LEVEL=INFO
+      
+      # Database Configuration
+      - ALPINE_DATABASE_MODE=external
+      - ALPINE_DATABASE_URL=jdbc:postgresql://dtrack-database:5432/dtrack
+      - ALPINE_DATABASE_DRIVER=org.postgresql.Driver
+      - ALPINE_DATABASE_USERNAME=dtrack
+      - ALPINE_DATABASE_PASSWORD=dtrack
+      
+      # Connection Pool Optimization
+      - ALPINE_DATABASE_POOL_ENABLED=true
+      - ALPINE_DATABASE_POOL_MAX_SIZE=15
+      - ALPINE_DATABASE_POOL_MIN_IDLE=3
+      - ALPINE_DATABASE_POOL_MAX_LIFETIME=300000  # 5 minutes
+      - ALPINE_DATABASE_POOL_IDLE_TIMEOUT=60000   # 1 minute
+      - ALPINE_DATABASE_POOL_CONNECTION_TIMEOUT=30000
+      - ALPINE_DATABASE_POOL_VALIDATION_TIMEOUT=5000
+      
+      # Connection settings
+      - ALPINE_DATABASE_CONNECT_TIMEOUT=30000
+      - ALPINE_DATABASE_LOGIN_TIMEOUT=30
+      
+      # JDBC parameters
+      - ALPINE_DATABASE_PROPERTIES=sslmode=disable&tcpKeepAlive=true&socketTimeout=60&connectTimeout=30&loginTimeout=30
+      
+      # Vulnerability Sources
+      - ALPINE_VULNERABILITY_SOURCE_NVD_ENABLED=true
+      - ALPINE_VULNERABILITY_SOURCE_GITHUB_ADVISORIES_ENABLED=true
+      - ALPINE_VULNERABILITY_SOURCE_OSV_ENABLED=true
+      
+      # Analyzer Configuration
+      - ALPINE_ANALYZER_INTERNAL_ENABLED=true
+      - ALPINE_ANALYZER_OSSINDEX_ENABLED=true
+      - ALPINE_ANALYZER_SNYK_ENABLED=false
+      
+      # Trivy Analyzer Configuration
+      - ALPINE_ANALYZER_TRIVY_ENABLED=true
+      - ALPINE_ANALYZER_TRIVY_API_URL=http://trivy-server:4954
+      - ALPINE_ANALYZER_TRIVY_TIMEOUT=600
+      
+      # Scanner Configuration
+      - ALPINE_SCANNER_INTERNAL_ENABLED=true
+      - ALPINE_SCANNER_OSSINDEX_ENABLED=true
+      - ALPINE_SCANNER_SNYK_ENABLED=false
+      
+      # Performance
+      - ALPINE_WORKER_THREADS=4
+      - ALPINE_HTTP_CLIENT_MAX_CONNECTIONS=50
+      - ALPINE_HTTP_CLIENT_CONNECTION_TIMEOUT=30000
+      - ALPINE_HTTP_CLIENT_SOCKET_TIMEOUT=120000
+    deploy:
+      resources:
+        limits:
+          memory: 6000m
+        reservations:
+          memory: 4086m
+      restart_policy:
+        condition: on-failure
+    ports:
+      - 8081:8080
+    restart: unless-stopped
+    depends_on:
+      - dtrack-postgres
+      - trivy-server
+    networks:
+      - dtrack-net
+
+  dtrack-frontend:
+    image: dependencytrack/frontend:4.13.5
+    hostname: dependencytrack-web
+    container_name: dependencytrack-web
+    environment:
+      - API_BASE_URL=http://localhost:8081
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    depends_on:
+      - dtrack-apiserver
+    networks:
+      - dtrack-net
+
+  trivy-server:
+    image: aquasec/trivy:0.58.1
+    hostname: trivy-server
+    container_name: trivy-server
+    command: >
+      server
+      --listen 0.0.0.0:4954
+    environment:
+      - TRIVY_TIMEOUT=600s
+      - TRIVY_SKIP_DB_UPDATE=false
+      - TRIVY_DB_REPOSITORY=ghcr.io/aquasecurity/trivy-db
+      - TRIVY_JAVA_DB_REPOSITORY=ghcr.io/aquasecurity/trivy-java-db
+    ports:
+      - "4954:4954"
+    volumes:
+      - trivy-cache:/root/.cache
+    restart: unless-stopped
+    networks:
+      - dtrack-net
+    # healthcheck:
+    #   test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:4954/ || exit 1"]
+    #   interval: 30s
+    #   timeout: 10s
+    #   retries: 3
+    #   start_period: 60s
+
+  sbom-webhook:
+    build: .
+    container_name: sbom-webhook
+    environment:
+      PORT: 8081
+      DTRACK_URL: http://dependencytrack-api:8080
+      DTRACK_API_KEY: odt_kmNoKGId_4Yvga34DFRkCTMMuNFPZHGK2n5U3kt2K
+      # DT_PROJECT_NAME: "[[.sbomReport.report.artifact.repository]]"
+      # DT_PROJECT_VERSION: "[[.sbomReport.report.artifact.tag]]"
+      DT_PROJECT_TAGS: "webhook,automated"
+      DT_PROJECT_PARENT: "develop"
+      LOG_LEVEL: info
+      LOG_FORMAT: ecs
+    ports:
+      - "8082:8081"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8081/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    depends_on:
+      - dtrack-apiserver
+    networks:
+      - dtrack-net
+    restart: unless-stopped
+
+volumes:
+  trivy-cache:
+  dtrack-postgres-data:
+networks:
+  dtrack-net:
