@@ -1,0 +1,10 @@
+dtrack-webhook
+.vscode/
+.env
+.DS_Store
+*.log
+coverage/
+.cache/
+.idea/
+test/
+tests/
