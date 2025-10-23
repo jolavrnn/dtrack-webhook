@@ -150,7 +150,7 @@ services:
     environment:
       PORT: 8081
       DTRACK_URL: http://dependencytrack-api:8080
-      DTRACK_API_KEY: odt_kmNoKGId_4Yvga34DFRkCTMMuNFPZHGK2n5U3kt2K
+      DTRACK_API_KEY: odt_kmNoKGId_4Yvga34DFRkCTMMuNFPZHGK2n5U3kt2K # <- example key, replace with your own
       # DT_PROJECT_NAME: "[[.sbomReport.report.artifact.repository]]"
       # DT_PROJECT_VERSION: "[[.sbomReport.report.artifact.tag]]"
       DT_PROJECT_TAGS: "webhook,automated"
