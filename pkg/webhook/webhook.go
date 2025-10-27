@@ -48,7 +48,7 @@ func (wh *WebhookHandler) HandleWebhook(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Process SBOM based on format
+	// Check SBOM format and prepare for upload, due to Trivy validation check.
 	result, err := wh.sbomProcessor.ProcessSBOM(body,
 		wh.config.ProjectNameTemplate,
 		wh.config.ProjectVersionTemplate,
@@ -62,7 +62,8 @@ func (wh *WebhookHandler) HandleWebhook(w http.ResponseWriter, r *http.Request) 
 	key := fmt.Sprintf("%d", time.Now().UnixNano())
 	wh.cache.Set(key, result.BOMData)
 
-	// Upload asynchronously
+	// Upload asynchronously to not block webhook response, as Dependency-Track may take time to process SBOMs.
+	// Will this work?
 	go wh.processUploadAsync(key, result, start)
 
 	w.WriteHeader(http.StatusAccepted)
@@ -83,7 +84,7 @@ func (wh *WebhookHandler) HandleWebhook(w http.ResponseWriter, r *http.Request) 
 }
 
 func (wh *WebhookHandler) processUploadAsync(key string, result *sbom.SBOMProcessingResult, start time.Time) {
-	// Ensure parent project exists if specified
+	// Make sure parent project exists to not override existing project.
 	if wh.config.ProjectParent != "" {
 		if err := wh.uploader.EnsureParentProjectExists(
 			wh.config.DtrackURL,
@@ -136,7 +137,7 @@ func (wh *WebhookHandler) processUploadAsync(key string, result *sbom.SBOMProces
 		"dependencies": result.Dependencies,
 		"time":         time.Since(start).String(),
 	}).Info("SBOM uploaded to DependencyTrack")
-	// Wait for BOM processing to complete, then trigger analysis
+	// Wait for BOM processing to complete, then trigger analysis as with new version(4.13.2) it didn't trigger automatically.
 	go wh.waitAndTriggerAnalysis(wh.config.DtrackURL, wh.config.DtrackAPIKey, wh.config.DtrackAPIKey, result.ProjectName, result.ProjectVersion)
 }
 
@@ -150,23 +151,22 @@ func (wh *WebhookHandler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 }
 
 // Scan Vuln
-// waitAndTriggerAnalysis waits for BOM processing to complete then triggers vulnerability analysis
 func (du *WebhookHandler) waitAndTriggerAnalysis(base, apiKey, token, project, version string) {
-	// Wait a bit for BOM processing
+	// Wait a bit for BOM processing to complete
 	time.Sleep(10 * time.Second)
 
-	// Get project UUID
+	// Get project UUID to use project name.
 	projectUUID, err := du.getProjectUUID(base, apiKey, project, version)
 	if err != nil {
 		du.log.WithError(err).Warn("Failed to get project UUID for analysis trigger")
 		return
 	}
 
-	// Trigger vulnerability analysis
+	// Start scan for vulnerabilities
 	du.triggerVulnerabilityAnalysis(base, apiKey, projectUUID, project, version)
 }
 
-// getProjectUUID retrieves the UUID for a project by name and version
+// Get the UUID for a project by name and version, as normal people do not remember or use UUIDs.
 func (du *WebhookHandler) getProjectUUID(base, apiKey, project, version string) (string, error) {
 	url := fmt.Sprintf("%s/api/v1/project/lookup?name=%s&version=%s",
 		strings.TrimRight(base, "/"), project, version)
@@ -200,7 +200,7 @@ func (du *WebhookHandler) getProjectUUID(base, apiKey, project, version string) 
 	return projectInfo.UUID, nil
 }
 
-// triggerVulnerabilityAnalysis triggers vulnerability analysis for a project
+// Start scan for vulnerabilities for a project
 func (du *WebhookHandler) triggerVulnerabilityAnalysis(base, apiKey, projectUUID, project, version string) {
 	url := fmt.Sprintf("%s/api/v1/analysis/project/%s", strings.TrimRight(base, "/"), projectUUID)
 

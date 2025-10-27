@@ -21,6 +21,8 @@ type Config struct {
 	Verbose                bool
 }
 
+// LoadConfig loads configuration from environment variables for K8s and Docker setup.
+// TODO: Switch to flag based configuration, and argument passing for CLI, also extend to allow override with custom parameters.
 func LoadConfig() *Config {
 	cfg := &Config{
 		Port:                   getenv("PORT", "8080"),

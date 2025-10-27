@@ -16,51 +16,45 @@ import (
 	"dtrack-webhook/pkg/webhook"
 )
 
+// Setup ECS logging.
 var log = logrus.New()
 
 func main() {
-	// Setup configuration
+	// Use configuration from environment variables as in K8s is much easier to setup, than to provide all necessary arguments.
 	cfg := config.LoadConfig()
-
-	// Setup logging
 	logging.SetupLogging(log, cfg.LogLevel, cfg.LogFormat)
 
-	// Validate critical configuration
+	// Check for required configuration.
 	if cfg.DtrackURL == "" || cfg.DtrackAPIKey == "" {
 		log.Fatal("Missing required environment variables: DTRACK_URL and DTRACK_API_KEY")
 	}
 
-	// Initialize cache
+	// Initialize cache, as sometimes it takes processing of already added SBOMs
 	cacheManager := cache.NewCacheManager(cfg.TTLSeconds)
-
-	// Start background cleanup
 	go cacheManager.Cleanup()
-
-	// Setup webhook handler
 	webhookHandler := webhook.NewWebhookHandler(cfg, cacheManager)
 
-	// Create custom router with security headers
 	router := http.NewServeMux()
+	// Trivy and Trivy Operator will send SBOM on it.
 	router.HandleFunc("/webhook", webhookHandler.HandleWebhook)
+	// Is it working??
 	router.HandleFunc("/health", webhookHandler.HealthCheck)
 
-	// Create HTTP server with comprehensive timeouts and limits
 	server := &http.Server{
 		Addr:    ":" + cfg.Port,
 		Handler: addSecurityHeaders(router),
-		// Timeout configurations
+		// Timeout configurations, because why not.
 		ReadTimeout:       15 * time.Second,
-		WriteTimeout:      30 * time.Second, // Longer for large BOM uploads
+		WriteTimeout:      30 * time.Second,
 		IdleTimeout:       60 * time.Second,
 		ReadHeaderTimeout: 5 * time.Second,
 		// Size limits
 		MaxHeaderBytes: 1 << 20, // 1 MB
 	}
-
-	// Channel to listen for errors coming from the listener
+	// Check for server errors, to not get stuck.
 	serverErrors := make(chan error, 1)
 
-	// Start server in a goroutine
+	// Start server
 	go func() {
 		log.WithFields(logrus.Fields{
 			"port":                cfg.Port,
@@ -76,11 +70,9 @@ func main() {
 		serverErrors <- server.ListenAndServe()
 	}()
 
-	// Blocking main and waiting for shutdown
 	osSignals := make(chan os.Signal, 1)
 	signal.Notify(osSignals, syscall.SIGINT, syscall.SIGTERM)
 
-	// Wait for either an error or OS signal
 	select {
 	case err := <-serverErrors:
 		log.Fatalf("Error starting server: %v", err)
@@ -88,12 +80,13 @@ func main() {
 	case <-osSignals:
 		log.Info("Start shutdown...")
 
-		// Give outstanding requests 30 seconds to complete
 		const timeout = 30 * time.Second
 		ctx, cancel := context.WithTimeout(context.Background(), timeout)
 		defer cancel()
 
-		// Asking listener to shutdown
+		// Use Graceful Shutdown, LOL XD.
+		// TODO: Improve this, with Linux login XD:
+		// https://i.programmerhumor.io/2021/06/programmerhumor-io-linux-memes-programming-memes-e7ccef9ccdab3ac.jpg
 		if err := server.Shutdown(ctx); err != nil {
 			log.Printf("Graceful shutdown did not complete in %v: %v", timeout, err)
 			if err := server.Close(); err != nil {
@@ -105,16 +98,16 @@ func main() {
 	log.Info("Shutdown complete")
 }
 
-// addSecurityHeaders adds security headers to all responses
+// Add security headers, as most of pshyhopaths forget about them
 func addSecurityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Security headers
+		// Check this: https://owasp.org/www-project-secure-headers/
+		// Best practice section.
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("X-XSS-Protection", "1; mode=block")
 		w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
 
-		// Remove server header
 		w.Header().Del("Server")
 
 		next.ServeHTTP(w, r)

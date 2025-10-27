@@ -1,0 +1,29 @@
+# .helm-docs.yaml
+version: "1"
+
+template: README.md.gotmpl
+output: README.md
+
+helm-docs:
+  auto-generate: true
+
+chart-to-generate:
+  - chart-search-root: charts
+
+output-file-template: README.md
+
+values:
+  path: values.yaml
+
+sections:
+  - name: chart-description
+    description: "## Description"
+
+  - name: usage
+    description: "## Usage"
+
+  - name: requirements
+    description: "## Requirements"
+
+  - name: values
+    description: "## Values"

@@ -1,0 +1,14 @@
+apiVersion: v2
+name: dtrack-webhook
+description: |-
+  A Helm chart for deploying the Dependency Track dtrack-webhook.
+
+  This chart is designed to work with Kubernetes and Helm.
+  
+  It provides a simple way to deploy and manage the dtrack-webhook service.
+
+type: application
+version: 0.1.0
+
+appVersion: "1.16.0"
+icon: "https://raw.githubusercontent.com/dependency-track/dependency-track/main/images/icon.png"

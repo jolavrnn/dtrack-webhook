@@ -9,6 +9,12 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// Some AI formating and setup for PROJECT_NAME and PROJECT_VERSION from SBOM report, even I don't have idea what did put here.
+// Too lazy to add each project name and version with regex or providing static, I leave it to automaticly use the one from SBOM.
+// Separate same project name with Parent or Tag, that do the trick just fine.
+// Example:
+// trivy image --format cyclonedx --output sbom.json nginx:latest
+// kubectl get sbom nginx-sbom -o json > sbom-crd.json
 type FormatProcessor struct {
 	verbose bool
 	log     *logrus.Logger

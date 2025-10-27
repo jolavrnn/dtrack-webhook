@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dtrack-webhook
+  labels:
+    app.kubernetes.io/name: dtrack-webhook
+    app.kubernetes.io/instance: dtrack-webhook
+    app.kubernetes.io/version: "1.0.0"
+spec:
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: dtrack-webhook
+  template:
+    metadata:
+      labels:
+        app: dtrack-webhook
+    spec:
+      serviceAccountName: dtrack-webhook
+      securityContext:
+        capabilities:
+          drop:
+          - ALL
+        readOnlyRootFilesystem: true
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+        - name: dtrack-webhook
+          image: ghcr.io/jolavrnn/dtrack-webhook:latest
+          imagePullPolicy: IfNotPresent
+          envFrom:
+          - configMapRef:
+              name: dtrack-webhook-config
+          - secretRef:
+              name: dtrack-webhook-secrets
+          ports:
+            - name: http
+              containerPort: 8081
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+          resources:
+            limits:
+              cpu: 100m
+              memory: 128Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi

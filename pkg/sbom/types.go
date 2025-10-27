@@ -1,6 +1,6 @@
 package sbom
 
-// TrivySBOM represents the Trivy-specific SBOM wrapper structure
+// Use this structure for Trivy-specific SBOMs.
 type TrivySBOM struct {
 	APIVersion string `json:"apiVersion"`
 	Kind       string `json:"kind"`
@@ -43,8 +43,9 @@ type CycloneDXBOM struct {
 }
 
 type CycloneDXMetadata struct {
-	Timestamp string              `json:"timestamp,omitempty"`
-	Tools     interface{}         `json:"tools,omitempty"` // Changed to interface{} to handle both object and array
+	Timestamp string `json:"timestamp,omitempty"`
+	// Most important, so you can use both Trivy and Trivy Operator generated SBOMs.
+	Tools     interface{}         `json:"tools,omitempty"`
 	Component *CycloneDXComponent `json:"component,omitempty"`
 }
 
@@ -82,7 +83,7 @@ type CycloneDXProperty struct {
 	Value string `json:"value"`
 }
 
-// SPDXDocument represents the SPDX document structure
+// SPDX format
 type SPDXDocument struct {
 	SPDXVersion       string           `json:"spdxVersion"`
 	DataLicense       string           `json:"dataLicense"`
@@ -93,6 +94,7 @@ type SPDXDocument struct {
 	Packages          []SPDXPackage    `json:"packages,omitempty"`
 }
 
+// SPDX format informations, for parsing it to DependencyTrack, as for some reason it doesn't show.
 type SPDXCreationInfo struct {
 	Created  string   `json:"created"`
 	Creators []string `json:"creators"`
@@ -110,7 +112,8 @@ type SPDXPackage struct {
 	CopyrightText    string `json:"copyrightText,omitempty"`
 }
 
-// SBOMProcessingResult contains the result of SBOM processing
+// Get result of SBOM conversion, due to SPDX and CycloneDX support from DependencyTrack.
+// https://github.com/DependencyTrack/dependency-track/discussions/1222
 type SBOMProcessingResult struct {
 	BOMData        []byte
 	ProjectName    string

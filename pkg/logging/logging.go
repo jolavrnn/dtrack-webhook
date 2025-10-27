@@ -7,6 +7,8 @@ import (
 	"go.elastic.co/ecslogrus"
 )
 
+// Use ECS Format to make integration with Elasticsearch easier.
+// Or use default, if you won't, I don't judge.
 func SetupLogging(log *logrus.Logger, levelStr, format string) {
 	level, err := logrus.ParseLevel(levelStr)
 	if err != nil {

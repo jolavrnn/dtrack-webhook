@@ -13,7 +13,6 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// ProjectCreateRequest represents the structure for creating a new project
 type ProjectCreateRequest struct {
 	Name    string `json:"name"`
 	Version string `json:"version"`
@@ -21,12 +20,11 @@ type ProjectCreateRequest struct {
 	Tags    []Tag  `json:"tags,omitempty"`
 }
 
-// Tag represents a DependencyTrack tag
 type Tag struct {
 	Name string `json:"name"`
 }
 
-// DTrackUploader handles DependencyTrack API interactions
+// DTrackUploader for DependencyTrack API interactions
 type DTrackUploader struct {
 	log *logrus.Logger
 }
@@ -37,7 +35,8 @@ func NewDTrackUploader() *DTrackUploader {
 	}
 }
 
-// parseTags converts comma-separated tags string to array of Tag objects
+// @parseTags
+// Converts comma-separated tags string to array of Tag objects
 func (du *DTrackUploader) parseTags(tagsString string) []Tag {
 	if tagsString == "" {
 		return nil
@@ -77,9 +76,9 @@ func (du *DTrackUploader) CheckProjectExistsByName(serverURL, apiKey, projectNam
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusOK {
-		return true, nil // Project exists
+		return true, nil
 	} else if resp.StatusCode == http.StatusNotFound {
-		return false, nil // Project doesn't exist
+		return false, nil
 	} else {
 		body, _ := io.ReadAll(resp.Body)
 		return false, fmt.Errorf("failed to check project existence, status code: %d, response: %s", resp.StatusCode, string(body))
@@ -92,7 +91,7 @@ func (du *DTrackUploader) CreateParentProject(serverURL, apiKey, projectName, pr
 
 	projectReq := ProjectCreateRequest{
 		Name:    projectName,
-		Version: "", // Parent projects typically don't have versions
+		Version: "",
 		Tags:    du.parseTags(projectTags),
 	}
 
@@ -142,7 +141,7 @@ func (du *DTrackUploader) EnsureParentProjectExists(serverURL, apiKey, parentNam
 		return fmt.Errorf("failed to check parent project existence: %v", err)
 	}
 
-	// If parent project doesn't exist, create it
+	// If parent project doesn't exist, create it, if it's provided by user
 	if !exists {
 		if err := du.CreateParentProject(serverURL, apiKey, parentName, projectTags); err != nil {
 			return fmt.Errorf("failed to create parent project: %v", err)
@@ -167,17 +166,16 @@ func (du *DTrackUploader) UploadToDependencyTrack(base, apiKey, project, version
 	var buf bytes.Buffer
 	writer := multipart.NewWriter(&buf)
 
-	// Use projectName and projectVersion fields - DependencyTrack will handle project creation automatically
+	// Use projectName and projectVersion fields - leave project creation to DependencyTrack, why not?
 	writer.WriteField("projectName", project)
 	writer.WriteField("projectVersion", version)
 	writer.WriteField("autoCreate", "true")
 
-	// For BOM upload, tags are still passed as comma-separated string
 	if projectTags != "" {
 		writer.WriteField("tags", projectTags)
 	}
 	if projectParent != "" {
-		// Use parentName instead of parentUUID
+		// Use parentName instead of parentUUID, as who normal will use UUID for updating projects?
 		writer.WriteField("parentName", projectParent)
 	}
 
@@ -192,7 +190,8 @@ func (du *DTrackUploader) UploadToDependencyTrack(base, apiKey, project, version
 	req.Header.Set("X-Api-Key", apiKey)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 
-	client := &http.Client{Timeout: 120 * time.Second} // Increased timeout for large BOMs
+	// Specify longer timeout for BOM upload, as there are tools/images which have too large dependencies, and they are fine with that?
+	client := &http.Client{Timeout: 120 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		return err
@@ -201,7 +200,7 @@ func (du *DTrackUploader) UploadToDependencyTrack(base, apiKey, project, version
 
 	body, _ := io.ReadAll(resp.Body)
 
-	// Log the response for debugging
+	// Use ECS logging format, to make your life easier. Nested JSON is fine touch, but not needed.
 	du.log.WithFields(logrus.Fields{
 		"project":       project,
 		"version":       version,
@@ -215,7 +214,6 @@ func (du *DTrackUploader) UploadToDependencyTrack(base, apiKey, project, version
 		return fmt.Errorf("DependencyTrack: %d %s", resp.StatusCode, string(body))
 	}
 
-	// Parse successful response to get more details
 	var response map[string]interface{}
 	if err := json.Unmarshal(body, &response); err == nil {
 		if token, ok := response["token"].(string); ok {

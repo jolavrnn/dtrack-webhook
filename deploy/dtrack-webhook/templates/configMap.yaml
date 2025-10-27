@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "dtrack-webhook.fullname" . }}-config
+data:
+  PORT: {{ (get (default (dict) .Values.env) "PORT" | default "8081") | quote }}
+  DTRACK_URL: {{ (get (default (dict) .Values.env) "DTRACK_URL" | default "http://dependencytrack-api.dependency-track.svc.cluster.local:8080") | quote }}
+  DT_PROJECT_TAGS: {{ (get (default (dict) .Values.env) "DT_PROJECT_TAGS" | default "webhook,automated") | quote }}
+  DT_PROJECT_PARENT: {{ (get (default (dict) .Values.env) "DT_PROJECT_PARENT" | default "develop") | quote }}
+  LOG_LEVEL: {{ (get (default (dict) .Values.env) "LOG_LEVEL" | default "info") | quote }}
+  LOG_FORMAT: {{ (get (default (dict) .Values.env) "LOG_FORMAT" | default "ecs") | quote }}

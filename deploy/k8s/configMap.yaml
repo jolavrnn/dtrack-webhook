@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dtrack-webhook-config
+data:
+  PORT: "8081"
+  DTRACK_URL: "http://dependencytrack-api.dependency-track.svc.cluster.local:8080"
+  DT_PROJECT_TAGS: "webhook,automated"
+  DT_PROJECT_PARENT: "develop"
+  LOG_LEVEL: "info"
+  LOG_FORMAT: "ecs"

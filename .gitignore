@@ -8,3 +8,6 @@ coverage/
 .idea/
 test/
 tests/
+!deploy/dtrack-webhook
+deploy/dtrack-webhook/.gitkeep
+deploy/dtrack-webhook/values.*.yaml
