@@ -3,6 +3,8 @@
 A robust Go-based tool for processing Software Bill of Materials (SBOM) files and integrating with [Dependency-Track](https://dependencytrack.org/).  
 Supports multiple SBOM formats (CycloneDX, SPDX, Trivy Operator) with optimized handling for Kubernetes and Trivy Operator outputs.
 
+Based on: https://github.com/takumakume/sbomreport-to-dependencytrack
+
 ## Features
 
 - **Multi-Format Support** – CycloneDX, SPDX, and Trivy Operator formats  
